@@ -15,7 +15,8 @@ static int __init example_init(void)
 
         res = thread_create();
         if (res < 0) {
-                return res;
+                thread_destroy();
+                return res; 
         }
 
         res = my_device_create();

@@ -131,7 +131,7 @@ int thread_create(void)
 void thread_destroy(void)
 {
         for (int i = 0; i < number_of_kthreads; i++) {        
-                kthread_stop(out_id[i]);
+                if (out_id[i] != NULL) kthread_stop(out_id[i]);
         }
 }
 
