@@ -26,54 +26,36 @@
 
 struct node {
         char buff[BUFF_LEN];
-        struct node * next;
+        struct list_head kl;
 };
 
 // Head and Tail of the List
-static struct node * head = NULL;
-static struct node * tail = NULL;
+static struct list_head head;
 static int counter = 0;
 
 // Adds a Node at the end of the list 
 int list_write(int kthread_id) {
 
-        // Creates New Node
-        if (head == NULL && tail == NULL) {
-                head = (struct node *) kmalloc(sizeof(struct node), GFP_USER);
-                if (head == NULL) return -1;
-                head->next = NULL;
-                tail = head;
-        }
-        else {
-                tail->next = (struct node *) kmalloc(sizeof(struct node), GFP_USER);
-                if (tail->next == NULL) return -1;
-                tail = tail->next;
-                tail->next = NULL;
-        }
+        struct node * new_element;
         
-        // Write on Node
-        sprintf(tail->buff, "Activation %d Written by Kthread No %d\n", counter++, kthread_id);
+        // Creates New Element 
+        new_element = kmalloc(sizeof(struct node), GFP_KERNEL);
+        if (new_element == NULL) return -1;
+        sprintf(new_element->buff, "Activation %d Written by Kthread No %d\n", counter++, kthread_id);
+
+        // Adds New Element to the End of the List
+        list_add_tail(&(new_element->kl), &head);
+
         return 0;
 }
 
-// Deletes the First Element of the List
-void list_delete_head(void) 
-{
-        struct node * tmp;
-
-        // Destroys Head
-        tmp = head;
-        head = head->next;
-        kfree(tmp);
-
-}
 
 // Competitive and Cooperative Synch
 static struct mutex buff_m;
 struct completion available_data;
 
 // Variables used for kthreads
-static int kernel_threads_created;
+static int number_of_kthreads_created;
 static int number_of_kthreads = 2;
 static int mperiod = 2000;           // Milliseconds
 static struct task_struct ** out_id;
@@ -86,7 +68,7 @@ module_param(number_of_kthreads, int, 0);
 static int output_thread(void *arg)
 {
         int kthread_id, err;
-        kthread_id = kernel_threads_created++;
+        kthread_id = number_of_kthreads_created++;
 
         while (!kthread_should_stop()) {
 
@@ -107,9 +89,10 @@ static int output_thread(void *arg)
 
 int thread_create(void)
 {
-        // Initialize Mutex and Completion
+        // Initialize Mutex, Completion and Kernel List
         mutex_init(&buff_m);
         init_completion(&available_data);
+        INIT_LIST_HEAD(&head);
   
         // Initialize Vector of Kthreads
         if (number_of_kthreads < 1) number_of_kthreads = 1;
@@ -137,19 +120,32 @@ void thread_destroy(void)
 
 int get_data(char *p, int size)
 {
-        int len, res;
+        struct list_head * l, * tmp;
+        struct node * elem_read;
+        int cnt, len, res;
 
         mutex_lock(&buff_m);
         len = BUFF_LEN;
         if (len > size) len = size; 
 
-          
-        // Reads From Buffer
-        if (head == NULL) BUG(); // This should not happen
-        res = copy_to_user(p,head->buff, len);
-        if (res) len = -1;
+        // Reads and Deletes only the first Element of the List
+        cnt = 0;
+        list_for_each_safe(l, tmp, &head) {
 
-        list_delete_head();
+                if (cnt == 0) { 
+                        // Reads First Element of the List
+                        elem_read = list_entry(l, struct node, kl);
+                        res = copy_to_user(p,elem_read->buff, len);
+                        if (res) len = -1;
+
+                        // Deletes First Element of the List
+                        list_del(l);
+                        kfree(elem_read);
+
+                        cnt = 1;
+                }
+
+        }
 
         // Releases Mutex and Returns Number of Characters Read
         mutex_unlock(&buff_m);
@@ -160,27 +156,29 @@ int get_data(char *p, int size)
 int write_data(const char * buf, int size)
 {
         int err;
+        struct node * new_element;
 
         if (size > BUFF_LEN) return -1;
         mutex_lock(&buff_m);
 
-        // Allocates new Node
-        tail->next = (struct node *) kmalloc(sizeof(struct node), GFP_USER);
-        if (tail->next == NULL) {
+        // Creates New Element 
+        new_element = kmalloc(sizeof(struct node), GFP_KERNEL);
+        if (new_element == NULL) {
                 mutex_unlock(&buff_m);
-                return 0;
+                return -1;
         }
-        tail = tail->next;
-        tail->next = NULL;
-        
-        // Writes on Node
-        err = copy_from_user(tail->buff, buf, size);
+
+        // Writes on the Buffer of the Element
+        err = copy_from_user(new_element->buff, buf, size);
         if (err) {
                 mutex_unlock(&buff_m);
                 return err;
         }
 
+        // Adds New Element to the End of the List
+        list_add_tail(&(new_element->kl), &head);
         mutex_unlock(&buff_m);
+
         return size;
 
 }
