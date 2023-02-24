@@ -78,8 +78,8 @@ static int output_thread(void *arg)
                     mutex_unlock(&buff_m);
                     return -1;
                 }    
-                if (counter != 1) complete(&available_data);
                 mutex_unlock(&buff_m);
+                complete(&available_data);
 
                 msleep(mperiod);
         }
