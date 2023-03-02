@@ -122,11 +122,10 @@ int get_data(char *p, int size)
 {
         struct list_head * l, * tmp;
         struct node * elem_read;
-        int cnt, len, res;
+        int cnt, res;
 
         mutex_lock(&buff_m);
-        len = BUFF_LEN;
-        if (len > size) len = size; 
+        if (size > BUFF_LEN) size = BUFF_LEN; 
 
         // Reads and Deletes only the first Element of the List
         cnt = 0;
@@ -135,8 +134,8 @@ int get_data(char *p, int size)
                 if (cnt == 0) { 
                         // Reads First Element of the List
                         elem_read = list_entry(l, struct node, kl);
-                        res = copy_to_user(p,elem_read->buff, len);
-                        if (res) len = -1;
+                        res = copy_to_user(p,elem_read->buff, size);
+                        if (res) res = -1;
 
                         // Deletes First Element of the List
                         list_del(l);
@@ -149,7 +148,7 @@ int get_data(char *p, int size)
 
         // Releases Mutex and Returns Number of Characters Read
         mutex_unlock(&buff_m);
-        return len;
+        return size;
 }
 
 
