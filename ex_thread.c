@@ -41,6 +41,7 @@ int list_write(int kthread_id) {
         // Creates New Element 
         new_element = kmalloc(sizeof(struct node), GFP_KERNEL);
         if (new_element == NULL) return -1;
+        memset(new_element->buff, '\0', BUFF_LEN); 
         sprintf(new_element->buff, "Activation %d Written by Kthread No %d\n", counter++, kthread_id);
 
         // Adds New Element to the End of the List
@@ -166,6 +167,7 @@ int write_data(const char * buf, int size)
                 mutex_unlock(&buff_m);
                 return -1;
         }
+        memset(new_element->buff, '\0', BUFF_LEN);
 
         // Writes on the Buffer of the Element
         err = copy_from_user(new_element->buff, buf, size);
